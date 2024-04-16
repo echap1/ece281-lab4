@@ -129,10 +129,21 @@ architecture top_basys3_arch of top_basys3 is
                o_floor   : out STD_LOGIC_VECTOR (3 downto 0)           
              );
     end component elevator_controller_fsm;
-  
+    
+    component numberGizmo is
+        Port ( i_floor : in STD_LOGIC_VECTOR (3 downto 0);
+               o_tens : out STD_LOGIC_VECTOR (3 downto 0);
+               o_ones : out STD_LOGIC_VECTOR (3 downto 0)
+             );
+    end component numberGizmo;
   
     signal w_clk: std_logic;
+    signal w_clk_mux: std_logic;
     signal w_floor: std_logic_vector(3 downto 0);
+    signal w_tens: std_logic_vector(3 downto 0);
+    signal w_ones: std_logic_vector(3 downto 0);
+    signal w_tens_disp: std_logic_vector(6 downto 0);
+    signal w_ones_disp: std_logic_vector(6 downto 0);
 begin
 	-- PORT MAPS ----------------------------------------
     elevator_controller_fsm_inst: elevator_controller_fsm
@@ -144,18 +155,52 @@ begin
         o_floor => w_floor
     );
     
-    sevenSegDecoder_inst: sevenSegDecoder
+    sevenSegDecoder1_inst: sevenSegDecoder
     port map(
-        i_D => w_floor,
-        o_S => seg
+        i_D => w_tens,
+        o_S => w_tens_disp
     );
     
-    clock_divider_inst: clock_divider
+    sevenSegDecoder2_inst: sevenSegDecoder
+    port map(
+        i_D => w_ones,
+        o_S => w_ones_disp
+    );
+    
+    numberGizmo_inst: numberGizmo
+    port map(
+        i_floor => w_floor,
+        o_tens => w_tens,
+        o_ones => w_ones
+    );
+    
+    clock_divider1_inst: clock_divider
     generic map ( k_DIV => 50000000 )
     port map(
         i_reset => btnL or btnU,
         i_clk => clk,
         o_clk => w_clk
+    );
+            
+    clock_divider2_inst: clock_divider
+    generic map ( k_DIV => 50000000 / 600 )
+    port map(
+        i_reset => '0',
+        i_clk => clk,
+        o_clk => w_clk_mux
+    );
+    
+    TDM4_inst: TDM4
+    generic map ( k_WIDTH => 7 )
+    port map(
+        i_clk => w_clk_mux,
+        i_reset => '0',
+        i_D0 => "1111111",
+        i_D1 => "1111111",
+        i_D2 => w_ones_disp,
+        i_D3 => w_tens_disp,
+        o_data => seg,
+        o_sel => an
     );
 	
 	-- CONCURRENT STATEMENTS ----------------------------
@@ -173,7 +218,6 @@ begin
 	-- leave unused switches UNCONNECTED. Ignore any warnings this causes.
 	
 	-- wire up active-low 7SD anodes (an) as required
-	an <= "1011";
 	
 	-- Tie any unused anodes to power ('1') to keep them off
 	
